@@ -1,6 +1,6 @@
 name: astrbot_plugin_time
 display_name: Time
 desc: 按群组维护成员时区，/time 输出所有登记成员的当前时间（含头像缩略图），支持登记、修改、移除及管理员操作。
-version: v1.0.2
+version: v1.0.3
 author: wewewe131
 repo: https://github.com/wewewe131/astr_group_timezone
