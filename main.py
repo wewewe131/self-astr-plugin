@@ -11,23 +11,90 @@ from astrbot.api.star import Context, Star, register
 
 
 KV_KEY = "timezones"
+ALIAS_KV_KEY = "aliases"
+ALIAS_MAX_LEN = 24
 QQ_AVATAR_URL = "https://q1.qlogo.cn/g?b=qq&nk={uid}&s=100"
 QQ_PLATFORMS = {"aiocqhttp", "qq_official"}
 OFFSET_RE = re.compile(
     r"^(?:UTC|GMT)?\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?$", re.IGNORECASE
 )
+DIVIDER = "─" * 14
 
 HELP_TEXT = (
-    "时间插件用法：\n"
-    "  /time                查看本群所有已登记成员的当前时间\n"
-    "  /time set <时区>     登记/修改自己的时区\n"
-    "                       例：/time set Asia/Shanghai 或 /time set +8\n"
-    "  /time unset          移除自己的时区登记\n"
-    "  /time list           列出本群所有登记\n"
-    "  /time help           显示本帮助\n"
-    "管理员：\n"
-    "  /time admin remove <user_id>   移除指定成员的登记\n"
-    "  /time admin clear              清空本群所有登记"
+    "时间插件用法\n"
+    f"{DIVIDER}\n"
+    "/time\n"
+    "  查看本群所有登记成员的当前时间\n"
+    "/time set <时区>\n"
+    "  登记/修改自己的时区\n"
+    "  例：/time set Asia/Shanghai\n"
+    "  例：/time set +8\n"
+    "/time unset\n"
+    "  移除自己的时区登记\n"
+    "/time list\n"
+    "  列出本群所有登记\n"
+    "/time help\n"
+    "  显示本帮助\n"
+    "/alias <别名>\n"
+    "  设置全局显示别名\n"
+    f"{DIVIDER}\n"
+    "管理员命令\n"
+    "/time admin remove <user_id>\n"
+    "  移除指定成员的登记\n"
+    "/time admin clear\n"
+    "  清空本群所有登记"
+)
+
+ALIAS_HELP_TEXT = (
+    "全局别名用法\n"
+    f"{DIVIDER}\n"
+    "/alias\n"
+    "  查看当前全局别名\n"
+    "/alias <别名>\n"
+    "  设置/修改全局别名\n"
+    "/alias unset\n"
+    "  清除全局别名\n"
+    f"（别名最长 {ALIAS_MAX_LEN} 字符，将覆盖 /time 列表中的显示名）"
+)
+
+MODULE_HELP_TEXT = (
+    "时间插件命令总览\n"
+    f"{DIVIDER}\n"
+    "【查看时间】\n"
+    "/time\n"
+    "  查看本群登记成员的当前时间\n"
+    "/time list\n"
+    "  列出本群所有登记\n"
+    f"{DIVIDER}\n"
+    "【时区登记】\n"
+    "/time set <时区>\n"
+    "  登记/修改自己的时区\n"
+    "  例：/time set Asia/Shanghai\n"
+    "  例：/time set +8\n"
+    "/time unset\n"
+    "  移除自己的时区登记\n"
+    f"{DIVIDER}\n"
+    "【全局别名】\n"
+    "/alias\n"
+    "  查看当前别名\n"
+    "/alias <别名>\n"
+    f"  设置/修改别名（≤ {ALIAS_MAX_LEN} 字符）\n"
+    "/alias unset\n"
+    "  清除别名\n"
+    f"{DIVIDER}\n"
+    "【帮助】\n"
+    "/help\n"
+    "  显示本总览\n"
+    "/time help\n"
+    "  /time 详细帮助\n"
+    "/alias help\n"
+    "  /alias 详细帮助\n"
+    f"{DIVIDER}\n"
+    "【管理员】\n"
+    "/time admin remove <user_id>\n"
+    "  移除指定成员的登记\n"
+    "/time admin clear\n"
+    "  清空本群所有登记"
 )
 
 
@@ -42,6 +109,7 @@ class TimePlugin(Star):
         super().__init__(context)
         self._lock = asyncio.Lock()
         self._data: dict[str, dict[str, dict[str, Any]]] = {}
+        self._aliases: dict[str, str] = {}
 
     async def initialize(self):
         """从框架 KV 存储加载数据到内存缓存。"""
@@ -51,6 +119,15 @@ class TimePlugin(Star):
         except Exception as e:
             logger.error(f"[time] failed to load kv data: {e}")
             self._data = {}
+        try:
+            loaded_alias = await self.get_kv_data(ALIAS_KV_KEY, {})
+            if isinstance(loaded_alias, dict):
+                self._aliases = {str(k): str(v) for k, v in loaded_alias.items()}
+            else:
+                self._aliases = {}
+        except Exception as e:
+            logger.error(f"[time] failed to load alias data: {e}")
+            self._aliases = {}
 
     async def _save(self) -> None:
         async with self._lock:
@@ -58,6 +135,21 @@ class TimePlugin(Star):
                 await self.put_kv_data(KV_KEY, self._data)
             except Exception as e:
                 logger.error(f"[time] failed to save kv data: {e}")
+
+    async def _save_aliases(self) -> None:
+        async with self._lock:
+            try:
+                await self.put_kv_data(ALIAS_KV_KEY, self._aliases)
+            except Exception as e:
+                logger.error(f"[time] failed to save alias data: {e}")
+
+    def _display_name(self, uid: str, info: dict | None = None) -> str:
+        alias = self._aliases.get(str(uid))
+        if alias:
+            return alias
+        if info and info.get("name"):
+            return info["name"]
+        return str(uid)
 
     @staticmethod
     def _parse_tz(text: str):
@@ -92,10 +184,10 @@ class TimePlugin(Star):
         raise ValueError(f"无法识别的时区：{text}（请使用 Asia/Shanghai 或 +8 之类）")
 
     @staticmethod
-    def _strip_cmd_prefix(raw: str) -> list[str]:
+    def _strip_cmd_prefix(raw: str, names: tuple[str, ...] = ("time",)) -> list[str]:
         tokens = (raw or "").strip().split()
         for i, tok in enumerate(tokens):
-            if tok.lstrip("/!").lower() == "time":
+            if tok.lstrip("/!").lower() in names:
                 return tokens[i + 1 :]
         return tokens
 
@@ -128,6 +220,59 @@ class TimePlugin(Star):
                 yield r
         else:
             yield event.plain_result(f"未知子命令：{action}\n\n{HELP_TEXT}")
+
+    @filter.command("alias", alias={"别名"})
+    async def alias_cmd(self, event: AstrMessageEvent):
+        """查看或设置自己的全局显示别名；/alias help 查看完整用法"""
+        tokens = self._strip_cmd_prefix(
+            event.message_str or "", names=("alias", "别名")
+        )
+        uid = str(event.get_sender_id())
+
+        if not tokens:
+            current = self._aliases.get(uid)
+            if current:
+                yield event.plain_result(
+                    f"你当前的全局别名：{current}\n"
+                    "修改：/alias <新别名>\n"
+                    "清除：/alias unset"
+                )
+            else:
+                yield event.plain_result(
+                    "你还没有设置全局别名\n"
+                    "设置：/alias <别名>"
+                )
+            return
+
+        first = tokens[0].lower()
+        if first in ("help", "帮助", "?"):
+            yield event.plain_result(ALIAS_HELP_TEXT)
+            return
+        if first in ("unset", "remove", "del", "delete", "clear", "移除", "删除", "清除"):
+            if uid in self._aliases:
+                del self._aliases[uid]
+                await self._save_aliases()
+                yield event.plain_result("已清除你的全局别名")
+            else:
+                yield event.plain_result("你还没有设置全局别名")
+            return
+
+        new_alias = " ".join(tokens).strip()
+        if not new_alias:
+            yield event.plain_result("别名不能为空")
+            return
+        if len(new_alias) > ALIAS_MAX_LEN:
+            yield event.plain_result(f"别名过长（最多 {ALIAS_MAX_LEN} 字符）")
+            return
+
+        self._aliases[uid] = new_alias
+        await self._save_aliases()
+        yield event.plain_result(f"已设置你的全局别名为：{new_alias}")
+
+    @filter.command("help", alias={"帮助"})
+    async def help_cmd(self, event: AstrMessageEvent):
+        """展示时间插件所有命令的总览"""
+        yield event.plain_result(MODULE_HELP_TEXT)
 
     async def _show_group_times(self, event: AstrMessageEvent):
         group_id = event.get_group_id()
@@ -162,17 +307,32 @@ class TimePlugin(Star):
         show_avatar = platform in QQ_PLATFORMS
 
         chain: list = [
-            Comp.Plain(f"本群共 {len(entries)} 位成员的当前时间：\n\n")
+            Comp.Plain(f"本群 {len(entries)} 位成员当前时间\n{DIVIDER}\n")
         ]
-        for uid, info, local in entries:
-            if show_avatar and uid.isdigit():
+        for idx, (uid, info, local) in enumerate(entries):
+            if idx > 0:
+                chain.append(Comp.Plain(f"{DIVIDER}\n"))
+            avatar_shown = show_avatar and uid.isdigit()
+            if avatar_shown:
                 chain.append(Comp.Image.fromURL(QQ_AVATAR_URL.format(uid=uid)))
-            name = info.get("name") or uid
+            name = self._display_name(uid, info)
             tz_label = info.get("tz", "?")
+            if tz_label.upper().startswith("UTC"):
+                tz_display = tz_label
+            else:
+                offset_raw = local.strftime("%z")
+                if offset_raw:
+                    tz_display = (
+                        f"{tz_label} (UTC{offset_raw[:3]}:{offset_raw[3:]})"
+                    )
+                else:
+                    tz_display = tz_label
+            name_line = f" {name}\n" if avatar_shown else f"{name}\n"
             chain.append(
                 Comp.Plain(
-                    f" {name} [{tz_label}]\n"
-                    f"  {local.strftime('%Y-%m-%d %H:%M:%S %Z').rstrip()}\n\n"
+                    name_line
+                    + f"{tz_display}\n"
+                    + f"{local.strftime('%Y-%m-%d  %H:%M:%S')}\n"
                 )
             )
 
@@ -228,9 +388,10 @@ class TimePlugin(Star):
         if not users:
             yield event.plain_result("本群暂无登记")
             return
-        lines = [f"本群已登记 {len(users)} 人："]
+        lines = [f"本群已登记 {len(users)} 人", DIVIDER]
         for uid, info in users.items():
-            lines.append(f"  - {info.get('name') or uid} [{uid}]: {info.get('tz')}")
+            lines.append(f"· {self._display_name(uid, info)}")
+            lines.append(f"  {info.get('tz')}  ·  {uid}")
         yield event.plain_result("\n".join(lines))
 
     async def _admin(self, event: AstrMessageEvent, rest: list[str]):
@@ -243,9 +404,12 @@ class TimePlugin(Star):
             return
         if not rest:
             yield event.plain_result(
-                "管理员用法：\n"
-                "  /time admin remove <user_id>\n"
-                "  /time admin clear"
+                "管理员用法\n"
+                f"{DIVIDER}\n"
+                "/time admin remove <user_id>\n"
+                "  移除指定成员的登记\n"
+                "/time admin clear\n"
+                "  清空本群所有登记"
             )
             return
 
