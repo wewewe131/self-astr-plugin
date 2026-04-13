@@ -361,7 +361,8 @@ class TimePlugin(Star):
         gkey = str(group_id)
         self._data.setdefault(gkey, {})[uid] = {"tz": canonical, "name": name}
         await self._save()
-        yield event.plain_result(f"已登记 {name} 的时区为 {canonical}")
+        display_name = self._display_name(uid, {"name": name})
+        yield event.plain_result(f"已登记 {display_name} 的时区为 {canonical}")
 
     async def _unset_tz(self, event: AstrMessageEvent):
         group_id = event.get_group_id()
@@ -419,11 +420,13 @@ class TimePlugin(Star):
         if sub in ("remove", "rm", "del", "delete") and len(rest) >= 2:
             target = rest[1]
             if target in self._data.get(gkey, {}):
+                target_info = self._data[gkey][target]
+                target_name = self._display_name(target, target_info)
                 del self._data[gkey][target]
                 if not self._data[gkey]:
                     del self._data[gkey]
                 await self._save()
-                yield event.plain_result(f"已移除 {target} 的时区登记")
+                yield event.plain_result(f"已移除 {target_name}（{target}）的时区登记")
             else:
                 yield event.plain_result(f"{target} 未登记")
         elif sub == "clear":
