@@ -9,6 +9,11 @@ class At:
         self.qq = qq
 
 
+class Plain:
+    def __init__(self, text):
+        self.text = text
+
+
 class MsgObj:
     def __init__(self, self_id=""):
         self.self_id = self_id
@@ -99,5 +104,26 @@ def test_alias_clear_without_data():
         evt = FakeEvent("/alias clear")
         result = await _collect(handler.handle(evt))
         assert result == ["你还没有设置任何名片"]
+
+    asyncio.run(_run())
+
+
+def test_alias_set_uses_message_chain_text_after_at():
+    async def _run():
+        async def fake_get(key, default):
+            return default
+
+        async def fake_put(key, value):
+            return None
+
+        storage = StorageService(fake_get, fake_put)
+        handler = AliasCommandHandler(storage)
+
+        evt = FakeEvent(
+            '/alias @def f(): print("反重力裙"); f(); f()  乌啪叽',
+            messages=[At("u2"), Plain(" 乌啪叽")],
+        )
+        result = await _collect(handler.handle(evt))
+        assert "已将 u2 的名片设置为：乌啪叽" in result[0]
 
     asyncio.run(_run())

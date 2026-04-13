@@ -40,4 +40,23 @@ def extract_at_targets(event: Any) -> list[str]:
 
 
 def drop_at_tokens(tokens: list[str]) -> list[str]:
-    return [t for t in tokens if not t.startswith("@")] 
+    return [t for t in tokens if not t.startswith("@")]
+
+
+def extract_text_without_mentions(event: Any) -> str:
+    """从消息链中提取非 @ 的纯文本内容。"""
+    try:
+        chain = event.get_messages() or []
+    except Exception:
+        return ""
+
+    parts: list[str] = []
+    for comp in chain:
+        is_at = comp.__class__.__name__ == "At" or hasattr(comp, "qq")
+        if is_at:
+            continue
+        text = getattr(comp, "text", None)
+        if text is None:
+            continue
+        parts.append(str(text))
+    return "".join(parts).strip()

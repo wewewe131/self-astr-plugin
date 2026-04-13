@@ -11,7 +11,12 @@ try:
         DIVIDER,
         HELP_ALIASES,
     )
-    from ..core.parsers import drop_at_tokens, extract_at_targets, strip_cmd_prefix
+    from ..core.parsers import (
+        drop_at_tokens,
+        extract_at_targets,
+        extract_text_without_mentions,
+        strip_cmd_prefix,
+    )
     from ..services.storage_service import StorageService
 except ImportError:  # pragma: no cover - local direct-import fallback
     from core.constants import (
@@ -22,7 +27,12 @@ except ImportError:  # pragma: no cover - local direct-import fallback
         DIVIDER,
         HELP_ALIASES,
     )
-    from core.parsers import drop_at_tokens, extract_at_targets, strip_cmd_prefix
+    from core.parsers import (
+        drop_at_tokens,
+        extract_at_targets,
+        extract_text_without_mentions,
+        strip_cmd_prefix,
+    )
     from services.storage_service import StorageService
 
 
@@ -36,6 +46,8 @@ class AliasCommandHandler:
         owner = str(event.get_sender_id())
 
         clean = drop_at_tokens(tokens)
+        text_without_mentions = extract_text_without_mentions(event)
+        text_tokens = strip_cmd_prefix(text_without_mentions, names=("alias", "别名"))
 
         if not at_targets:
             if not clean:
@@ -71,7 +83,9 @@ class AliasCommandHandler:
             )
             return
 
-        if clean and clean[0].lower() in ALIAS_UNSET_ALIASES:
+        action_tokens = text_tokens or clean
+
+        if action_tokens and action_tokens[0].lower() in ALIAS_UNSET_ALIASES:
             owned = self.storage.aliases.get(owner) or {}
             removed, missing = [], []
             for tgt in at_targets:
@@ -93,7 +107,7 @@ class AliasCommandHandler:
             yield event.plain_result("\n".join(parts) or "无变更")
             return
 
-        if not clean:
+        if not action_tokens:
             owned = self.storage.aliases.get(owner) or {}
             lines = []
             for tgt in at_targets:
@@ -108,7 +122,7 @@ class AliasCommandHandler:
             yield event.plain_result("一次只能为一位成员设置名片")
             return
 
-        new_alias = " ".join(clean).strip()
+        new_alias = " ".join(action_tokens).strip()
         if not new_alias:
             yield event.plain_result("别名不能为空")
             return
