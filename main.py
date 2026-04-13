@@ -16,7 +16,7 @@ ALIAS_MAX_LEN = 24
 QQ_AVATAR_URL = "https://q1.qlogo.cn/g?b=qq&nk={uid}&s=100"
 QQ_PLATFORMS = {"aiocqhttp", "qq_official"}
 OFFSET_RE = re.compile(
-    r"^(?:UTC|GMT)?\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?$", re.IGNORECASE
+    r"^(?:UTC|GMT)?\s*([+-])?\s*(\d{1,2})(?::?(\d{2}))?$", re.IGNORECASE
 )
 DIVIDER = "─" * 14
 
@@ -29,6 +29,7 @@ HELP_TEXT = (
     "  登记/修改自己的时区\n"
     "  例：/time set Asia/Shanghai\n"
     "  例：/time set +8\n"
+    "  建议使用地区时区以自动处理夏令时（如 /time set America/New_York）\n"
     "/time unset\n"
     "  移除自己的时区登记\n"
     "/time list\n"
@@ -71,6 +72,7 @@ MODULE_HELP_TEXT = (
     "  登记/修改自己的时区\n"
     "  例：/time set Asia/Shanghai\n"
     "  例：/time set +8\n"
+    "  建议使用地区时区以自动处理夏令时（如 America/New_York）\n"
     "/time unset\n"
     "  移除自己的时区登记\n"
     f"{DIVIDER}\n"
@@ -327,6 +329,8 @@ class TimePlugin(Star):
                     )
                 else:
                     tz_display = tz_label
+                if (local.dst() or timedelta(0)) > timedelta(0):
+                    tz_display += " · 夏令时"
             name_line = f" {name}\n" if avatar_shown else f"{name}\n"
             chain.append(
                 Comp.Plain(
@@ -345,7 +349,9 @@ class TimePlugin(Star):
             return
         if not rest:
             yield event.plain_result(
-                "用法：/time set <时区>\n例：/time set Asia/Shanghai 或 /time set +8"
+                "用法：/time set <时区>\n"
+                "例：/time set Asia/Shanghai 或 /time set +8\n"
+                "建议：使用地区时区可自动处理夏令时（如 America/New_York）"
             )
             return
 
@@ -362,7 +368,10 @@ class TimePlugin(Star):
         self._data.setdefault(gkey, {})[uid] = {"tz": canonical, "name": name}
         await self._save()
         display_name = self._display_name(uid, {"name": name})
-        yield event.plain_result(f"已登记 {display_name} 的时区为 {canonical}")
+        msg = f"已登记 {display_name} 的时区为 {canonical}"
+        if canonical.upper().startswith("UTC"):
+            msg += "\n提示：固定 UTC 偏移不会随夏令时自动切换，若需要自动切换请使用地区时区（如 America/New_York）"
+        yield event.plain_result(msg)
 
     async def _unset_tz(self, event: AstrMessageEvent):
         group_id = event.get_group_id()
