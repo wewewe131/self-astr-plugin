@@ -2,7 +2,10 @@
 
 from typing import Any
 
-from core.constants import MODULE_HELP_TEXT
+try:
+    from ..core.constants import MODULE_HELP_TEXT
+except ImportError:  # pragma: no cover - local direct-import fallback
+    from core.constants import MODULE_HELP_TEXT
 
 
 class HelpCommandHandler:

@@ -4,8 +4,12 @@ import asyncio
 import logging
 from typing import Awaitable, Callable
 
-from core.constants import ALIAS_KV_KEY, KV_KEY
-from core.types import AliasData, TimezoneData
+try:
+    from ..core.constants import ALIAS_KV_KEY, KV_KEY
+    from ..core.types import AliasData, TimezoneData
+except ImportError:  # pragma: no cover - local direct-import fallback
+    from core.constants import ALIAS_KV_KEY, KV_KEY
+    from core.types import AliasData, TimezoneData
 
 try:
     from astrbot.api import logger

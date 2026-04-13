@@ -2,19 +2,34 @@
 
 from typing import Any
 
-from core.constants import (
-    ADMIN_REMOVE_ALIASES,
-    DIVIDER,
-    HELP_ALIASES,
-    HELP_TEXT,
-    TIME_LIST_ALIASES,
-    TIME_SET_ALIASES,
-    TIME_UNSET_ALIASES,
-)
-from core.parsers import extract_at_targets, strip_cmd_prefix
-from services.render_service import RenderService
-from services.storage_service import StorageService
-from services.time_service import TimeService
+try:
+    from ..core.constants import (
+        ADMIN_REMOVE_ALIASES,
+        DIVIDER,
+        HELP_ALIASES,
+        HELP_TEXT,
+        TIME_LIST_ALIASES,
+        TIME_SET_ALIASES,
+        TIME_UNSET_ALIASES,
+    )
+    from ..core.parsers import extract_at_targets, strip_cmd_prefix
+    from ..services.render_service import RenderService
+    from ..services.storage_service import StorageService
+    from ..services.time_service import TimeService
+except ImportError:  # pragma: no cover - local direct-import fallback
+    from core.constants import (
+        ADMIN_REMOVE_ALIASES,
+        DIVIDER,
+        HELP_ALIASES,
+        HELP_TEXT,
+        TIME_LIST_ALIASES,
+        TIME_SET_ALIASES,
+        TIME_UNSET_ALIASES,
+    )
+    from core.parsers import extract_at_targets, strip_cmd_prefix
+    from services.render_service import RenderService
+    from services.storage_service import StorageService
+    from services.time_service import TimeService
 
 
 class TimeCommandHandler:

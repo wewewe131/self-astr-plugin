@@ -2,16 +2,28 @@
 
 from typing import Any
 
-from core.constants import (
-    ALIAS_CLEAR_ALIASES,
-    ALIAS_HELP_TEXT,
-    ALIAS_MAX_LEN,
-    ALIAS_UNSET_ALIASES,
-    DIVIDER,
-    HELP_ALIASES,
-)
-from core.parsers import drop_at_tokens, extract_at_targets, strip_cmd_prefix
-from services.storage_service import StorageService
+try:
+    from ..core.constants import (
+        ALIAS_CLEAR_ALIASES,
+        ALIAS_HELP_TEXT,
+        ALIAS_MAX_LEN,
+        ALIAS_UNSET_ALIASES,
+        DIVIDER,
+        HELP_ALIASES,
+    )
+    from ..core.parsers import drop_at_tokens, extract_at_targets, strip_cmd_prefix
+    from ..services.storage_service import StorageService
+except ImportError:  # pragma: no cover - local direct-import fallback
+    from core.constants import (
+        ALIAS_CLEAR_ALIASES,
+        ALIAS_HELP_TEXT,
+        ALIAS_MAX_LEN,
+        ALIAS_UNSET_ALIASES,
+        DIVIDER,
+        HELP_ALIASES,
+    )
+    from core.parsers import drop_at_tokens, extract_at_targets, strip_cmd_prefix
+    from services.storage_service import StorageService
 
 
 class AliasCommandHandler:

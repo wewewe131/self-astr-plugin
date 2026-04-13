@@ -4,8 +4,12 @@ import logging
 from datetime import datetime, timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from core.constants import OFFSET_RE
-from core.types import AliasData, Entry, UserInfo
+try:
+    from ..core.constants import OFFSET_RE
+    from ..core.types import AliasData, Entry, UserInfo
+except ImportError:  # pragma: no cover - local direct-import fallback
+    from core.constants import OFFSET_RE
+    from core.types import AliasData, Entry, UserInfo
 
 try:
     from astrbot.api import logger

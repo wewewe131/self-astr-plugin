@@ -1,12 +1,20 @@
 ﻿from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, register
 
-from handlers.alias_handler import AliasCommandHandler
-from handlers.help_handler import HelpCommandHandler
-from handlers.time_handler import TimeCommandHandler
-from services.render_service import RenderService
-from services.storage_service import StorageService
-from services.time_service import TimeService
+try:
+    from .handlers.alias_handler import AliasCommandHandler
+    from .handlers.help_handler import HelpCommandHandler
+    from .handlers.time_handler import TimeCommandHandler
+    from .services.render_service import RenderService
+    from .services.storage_service import StorageService
+    from .services.time_service import TimeService
+except ImportError:  # pragma: no cover - local direct-import fallback
+    from handlers.alias_handler import AliasCommandHandler
+    from handlers.help_handler import HelpCommandHandler
+    from handlers.time_handler import TimeCommandHandler
+    from services.render_service import RenderService
+    from services.storage_service import StorageService
+    from services.time_service import TimeService
 
 
 @register(

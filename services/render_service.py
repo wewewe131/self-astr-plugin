@@ -3,8 +3,12 @@
 from datetime import timedelta
 from typing import Any, Callable
 
-from core.constants import DIVIDER, QQ_AVATAR_URL, QQ_PLATFORMS
-from core.types import Entry
+try:
+    from ..core.constants import DIVIDER, QQ_AVATAR_URL, QQ_PLATFORMS
+    from ..core.types import Entry
+except ImportError:  # pragma: no cover - local direct-import fallback
+    from core.constants import DIVIDER, QQ_AVATAR_URL, QQ_PLATFORMS
+    from core.types import Entry
 
 
 class RenderService:
