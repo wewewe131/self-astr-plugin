@@ -46,14 +46,14 @@ HELP_TEXT = (
 )
 
 ALIAS_HELP_TEXT = (
-    "全局别名用法\n"
+    "名片用法\n"
     f"{DIVIDER}\n"
     "/alias\n"
-    "  查看当前全局别名\n"
+    "  查看当前名片\n"
     "/alias <别名>\n"
-    "  设置/修改全局别名\n"
+    "  设置/修改名片\n"
     "/alias unset\n"
-    "  清除全局别名\n"
+    "  清除名片\n"
     f"（别名最长 {ALIAS_MAX_LEN} 字符，将覆盖 /time 列表中的显示名）"
 )
 
@@ -74,7 +74,7 @@ MODULE_HELP_TEXT = (
     "/time unset\n"
     "  移除自己的时区登记\n"
     f"{DIVIDER}\n"
-    "【全局别名】\n"
+    "【名片】\n"
     "/alias\n"
     "  查看当前别名\n"
     "/alias <别名>\n"
@@ -233,13 +233,13 @@ class TimePlugin(Star):
             current = self._aliases.get(uid)
             if current:
                 yield event.plain_result(
-                    f"你当前的全局别名：{current}\n"
+                    f"你当前的名片：{current}\n"
                     "修改：/alias <新别名>\n"
                     "清除：/alias unset"
                 )
             else:
                 yield event.plain_result(
-                    "你还没有设置全局别名\n"
+                    "你还没有设置名片\n"
                     "设置：/alias <别名>"
                 )
             return
@@ -252,9 +252,9 @@ class TimePlugin(Star):
             if uid in self._aliases:
                 del self._aliases[uid]
                 await self._save_aliases()
-                yield event.plain_result("已清除你的全局别名")
+                yield event.plain_result("已清除你的名片")
             else:
-                yield event.plain_result("你还没有设置全局别名")
+                yield event.plain_result("你还没有设置名片")
             return
 
         new_alias = " ".join(tokens).strip()
@@ -267,7 +267,7 @@ class TimePlugin(Star):
 
         self._aliases[uid] = new_alias
         await self._save_aliases()
-        yield event.plain_result(f"已设置你的全局别名为：{new_alias}")
+        yield event.plain_result(f"已设置你的名片为：{new_alias}")
 
     @filter.command("help", alias={"帮助"})
     async def help_cmd(self, event: AstrMessageEvent):
