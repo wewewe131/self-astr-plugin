@@ -25,6 +25,8 @@ HELP_TEXT = (
     f"{DIVIDER}\n"
     "/time\n"
     "  查看本群所有登记成员的当前时间\n"
+    "/time @成员 [@成员...]\n"
+    "  仅查看指定成员的当前时间\n"
     "/time set <时区>\n"
     "  登记/修改自己的时区\n"
     "  例：/time set Asia/Shanghai\n"
@@ -64,6 +66,8 @@ MODULE_HELP_TEXT = (
     "【查看时间】\n"
     "/time\n"
     "  查看本群登记成员的当前时间\n"
+    "/time @成员 [@成员...]\n"
+    "  仅查看指定成员的当前时间\n"
     "/time list\n"
     "  列出本群所有登记\n"
     f"{DIVIDER}\n"
@@ -193,10 +197,41 @@ class TimePlugin(Star):
                 return tokens[i + 1 :]
         return tokens
 
+    @staticmethod
+    def _extract_at_targets(event: AstrMessageEvent) -> list[str]:
+        """从消息链中提取所有被 @ 的成员 ID（排除机器人自己与 @全体）。"""
+        self_id = ""
+        try:
+            self_id = str(getattr(event.message_obj, "self_id", "") or "")
+        except Exception:
+            pass
+        targets: list[str] = []
+        try:
+            chain = event.get_messages() or []
+        except Exception:
+            chain = []
+        for comp in chain:
+            if not isinstance(comp, Comp.At):
+                continue
+            qq = str(getattr(comp, "qq", "") or "").strip()
+            if not qq or qq.lower() == "all":
+                continue
+            if self_id and qq == self_id:
+                continue
+            if qq not in targets:
+                targets.append(qq)
+        return targets
+
     @filter.command("time", alias={"时间"})
     async def time_cmd(self, event: AstrMessageEvent):
         """查看本群成员的时区时间；/time help 查看完整用法"""
         tokens = self._strip_cmd_prefix(event.message_str or "")
+        at_targets = self._extract_at_targets(event)
+
+        if at_targets:
+            async for r in self._show_member_times(event, at_targets):
+                yield r
+            return
 
         if not tokens:
             async for r in self._show_group_times(event):
@@ -276,41 +311,38 @@ class TimePlugin(Star):
         """展示时间插件所有命令的总览"""
         yield event.plain_result(MODULE_HELP_TEXT)
 
-    async def _show_group_times(self, event: AstrMessageEvent):
-        group_id = event.get_group_id()
-        if not group_id:
-            yield event.plain_result("该指令只能在群组中使用")
-            return
-
-        users = self._data.get(str(group_id), {})
-        if not users:
-            yield event.plain_result(
-                "本群还没有成员登记时区～\n使用 /time set <时区> 登记（如 /time set Asia/Shanghai）"
-            )
-            return
-
+    def _build_entries(
+        self, users: dict[str, dict[str, Any]], uids: list[str] | None = None
+    ) -> tuple[list[tuple[str, dict, datetime]], list[str]]:
+        """构造 (uid, info, local_time) 列表，同时返回无法解析的 uid 列表。"""
         now_utc = datetime.now(dt_timezone.utc)
         entries: list[tuple[str, dict, datetime]] = []
-        for uid, info in users.items():
+        bad: list[str] = []
+        iter_uids = uids if uids is not None else list(users.keys())
+        for uid in iter_uids:
+            info = users.get(uid)
+            if not info:
+                continue
             try:
                 tz, _ = self._parse_tz(info.get("tz", ""))
                 local = now_utc.astimezone(tz)
                 entries.append((uid, info, local))
             except Exception as e:
                 logger.warning(f"[time] bad tz for {uid}: {e}")
-
-        if not entries:
-            yield event.plain_result("本群登记数据异常，请重新登记")
-            return
-
+                bad.append(uid)
         entries.sort(key=lambda x: x[2].utcoffset() or timedelta(0))
+        return entries, bad
 
+    def _render_entries(
+        self,
+        event: AstrMessageEvent,
+        entries: list[tuple[str, dict, datetime]],
+        header: str,
+    ) -> list:
         platform = event.get_platform_name()
         show_avatar = platform in QQ_PLATFORMS
 
-        chain: list = [
-            Comp.Plain(f"本群 {len(entries)} 位成员当前时间\n{DIVIDER}\n")
-        ]
+        chain: list = [Comp.Plain(f"{header}\n{DIVIDER}\n")]
         for idx, (uid, info, local) in enumerate(entries):
             if idx > 0:
                 chain.append(Comp.Plain(f"{DIVIDER}\n"))
@@ -339,7 +371,65 @@ class TimePlugin(Star):
                     + f"{local.strftime('%Y-%m-%d  %H:%M:%S')}\n"
                 )
             )
+        return chain
 
+    async def _show_group_times(self, event: AstrMessageEvent):
+        group_id = event.get_group_id()
+        if not group_id:
+            yield event.plain_result("该指令只能在群组中使用")
+            return
+
+        users = self._data.get(str(group_id), {})
+        if not users:
+            yield event.plain_result(
+                "本群还没有成员登记时区～\n使用 /time set <时区> 登记（如 /time set Asia/Shanghai）"
+            )
+            return
+
+        entries, _ = self._build_entries(users)
+        if not entries:
+            yield event.plain_result("本群登记数据异常，请重新登记")
+            return
+
+        chain = self._render_entries(
+            event, entries, f"本群 {len(entries)} 位成员当前时间"
+        )
+        yield event.chain_result(chain)
+
+    async def _show_member_times(
+        self, event: AstrMessageEvent, target_uids: list[str]
+    ):
+        group_id = event.get_group_id()
+        if not group_id:
+            yield event.plain_result("该指令只能在群组中使用")
+            return
+
+        users = self._data.get(str(group_id), {})
+        missing = [uid for uid in target_uids if uid not in users]
+        present = [uid for uid in target_uids if uid in users]
+
+        if not present:
+            yield event.plain_result(
+                "被查询的成员尚未登记时区\n可让对方使用 /time set <时区> 登记"
+            )
+            return
+
+        entries, _ = self._build_entries(users, present)
+        if not entries:
+            yield event.plain_result("被查询成员的登记数据异常，请重新登记")
+            return
+
+        if len(entries) == 1:
+            uid0, info0, _ = entries[0]
+            header = f"{self._display_name(uid0, info0)} 的当前时间"
+        else:
+            header = f"{len(entries)} 位成员的当前时间"
+        chain = self._render_entries(event, entries, header)
+        if missing:
+            miss_names = "、".join(missing)
+            chain.append(
+                Comp.Plain(f"{DIVIDER}\n未登记：{miss_names}")
+            )
         yield event.chain_result(chain)
 
     async def _set_tz(self, event: AstrMessageEvent, rest: list[str]):
