@@ -9,6 +9,13 @@ try:
     from .services.storage_service import StorageService
     from .services.time_service import TimeService
 except ImportError:  # pragma: no cover - local direct-import fallback
+    import sys
+    from pathlib import Path
+
+    plugin_root = str(Path(__file__).resolve().parent)
+    if plugin_root not in sys.path:
+        sys.path.insert(0, plugin_root)
+
     from handlers.alias_handler import AliasCommandHandler
     from handlers.help_handler import HelpCommandHandler
     from handlers.time_handler import TimeCommandHandler
