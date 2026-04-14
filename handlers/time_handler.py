@@ -44,12 +44,7 @@ class TimeCommandHandler:
         self.render_service = render_service
 
     def _display_name(self, uid: str, info: dict | None = None, viewer: str | None = None) -> str:
-        return self.time_service.display_name(
-            uid,
-            info=info,
-            aliases=self.storage.aliases,
-            viewer=viewer,
-        )
+        return self.time_service.display_name(uid, info=info)
 
     async def handle(self, event: Any):
         tokens = strip_cmd_prefix(event.message_str or "")
@@ -91,7 +86,8 @@ class TimeCommandHandler:
             yield event.plain_result("该指令只能在群组中使用")
             return
 
-        users = self.storage.data.get(str(group_id), {})
+        viewer = str(event.get_sender_id())
+        users = await self.storage.list_timezones(str(group_id), viewer=viewer)
         if not users:
             yield event.plain_result(
                 "本群还没有成员登记时区～\n使用 /time set <时区> 登记（如 /time set Asia/Shanghai）"
@@ -103,7 +99,6 @@ class TimeCommandHandler:
             yield event.plain_result("本群登记数据异常，请重新登记")
             return
 
-        viewer = str(event.get_sender_id())
         chain = self.render_service.render_entries(
             event,
             entries,
@@ -119,7 +114,12 @@ class TimeCommandHandler:
             yield event.plain_result("该指令只能在群组中使用")
             return
 
-        users = self.storage.data.get(str(group_id), {})
+        viewer = str(event.get_sender_id())
+        users = await self.storage.list_timezones(
+            str(group_id),
+            viewer=viewer,
+            target_uids=target_uids,
+        )
         missing = [uid for uid in target_uids if uid not in users]
         present = [uid for uid in target_uids if uid in users]
 
@@ -134,7 +134,6 @@ class TimeCommandHandler:
             yield event.plain_result("被查询成员的登记数据异常，请重新登记")
             return
 
-        viewer = str(event.get_sender_id())
         if len(entries) == 1:
             uid0, info0, _ = entries[0]
             header = f"{self._display_name(uid0, info0, viewer=viewer)} 的当前时间"
@@ -177,8 +176,7 @@ class TimeCommandHandler:
         uid = str(event.get_sender_id())
         name = event.get_sender_name() or uid
         gkey = str(group_id)
-        self.storage.data.setdefault(gkey, {})[uid] = {"tz": canonical, "name": name}
-        await self.storage.save_timezones()
+        await self.storage.upsert_timezone(gkey, uid, canonical, name)
 
         display_name = self._display_name(uid, {"name": name}, viewer=uid)
         msg = f"已登记 {display_name} 的时区为 {canonical}"
@@ -193,13 +191,10 @@ class TimeCommandHandler:
             return
         uid = str(event.get_sender_id())
         gkey = str(group_id)
-        if uid not in self.storage.data.get(gkey, {}):
+        removed = await self.storage.delete_timezone(gkey, uid)
+        if not removed:
             yield event.plain_result("你还没有登记时区")
             return
-        del self.storage.data[gkey][uid]
-        if not self.storage.data[gkey]:
-            del self.storage.data[gkey]
-        await self.storage.save_timezones()
         yield event.plain_result("已移除你的时区登记")
 
     async def _list_tz(self, event: Any):
@@ -207,11 +202,11 @@ class TimeCommandHandler:
         if not group_id:
             yield event.plain_result("该指令只能在群组中使用")
             return
-        users = self.storage.data.get(str(group_id), {})
+        viewer = str(event.get_sender_id())
+        users = await self.storage.list_timezones(str(group_id), viewer=viewer)
         if not users:
             yield event.plain_result("本群暂无登记")
             return
-        viewer = str(event.get_sender_id())
         lines = [f"本群已登记 {len(users)} 人", DIVIDER]
         for uid, info in users.items():
             lines.append(f"· {self._display_name(uid, info, viewer=viewer)}")
@@ -242,24 +237,24 @@ class TimeCommandHandler:
 
         if sub in ADMIN_REMOVE_ALIASES and len(rest) >= 2:
             target = rest[1]
-            if target in self.storage.data.get(gkey, {}):
-                target_info = self.storage.data[gkey][target]
+            target_info = await self.storage.get_timezone(
+                gkey,
+                target,
+                viewer=str(event.get_sender_id()),
+            )
+            if target_info:
                 target_name = self._display_name(
                     target,
                     target_info,
                     viewer=str(event.get_sender_id()),
                 )
-                del self.storage.data[gkey][target]
-                if not self.storage.data[gkey]:
-                    del self.storage.data[gkey]
-                await self.storage.save_timezones()
+                await self.storage.delete_timezone(gkey, target)
                 yield event.plain_result(f"已移除 {target_name}（{target}）的时区登记")
             else:
                 yield event.plain_result(f"{target} 未登记")
         elif sub == "clear":
-            if gkey in self.storage.data:
-                del self.storage.data[gkey]
-                await self.storage.save_timezones()
+            removed = await self.storage.clear_group_timezones(gkey)
+            if removed:
                 yield event.plain_result("已清空本群所有时区登记")
             else:
                 yield event.plain_result("本群暂无登记")

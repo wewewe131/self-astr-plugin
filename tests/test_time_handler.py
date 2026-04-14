@@ -64,15 +64,10 @@ async def _collect(async_gen):
     return [item async for item in async_gen]
 
 
-def test_time_route_unknown_subcommand():
+def test_time_route_unknown_subcommand(tmp_path):
     async def _run():
-        async def fake_get(key, default):
-            return default
-
-        async def fake_put(key, value):
-            return None
-
-        storage = StorageService(fake_get, fake_put)
+        storage = StorageService(sqlite_db_path=tmp_path / "data_v4.db")
+        await storage.initialize()
         handler = TimeCommandHandler(storage, TimeService(), FakeRenderService())
 
         event = FakeEvent("/time what", group_id="g1")
@@ -83,15 +78,10 @@ def test_time_route_unknown_subcommand():
     asyncio.run(_run())
 
 
-def test_time_requires_group_for_default_show():
+def test_time_requires_group_for_default_show(tmp_path):
     async def _run():
-        async def fake_get(key, default):
-            return default
-
-        async def fake_put(key, value):
-            return None
-
-        storage = StorageService(fake_get, fake_put)
+        storage = StorageService(sqlite_db_path=tmp_path / "data_v4.db")
+        await storage.initialize()
         handler = TimeCommandHandler(storage, TimeService(), FakeRenderService())
 
         event = FakeEvent("/time")
@@ -101,15 +91,10 @@ def test_time_requires_group_for_default_show():
     asyncio.run(_run())
 
 
-def test_time_set_and_list_routes():
+def test_time_set_and_list_routes(tmp_path):
     async def _run():
-        async def fake_get(key, default):
-            return default
-
-        async def fake_put(key, value):
-            return None
-
-        storage = StorageService(fake_get, fake_put)
+        storage = StorageService(sqlite_db_path=tmp_path / "data_v4.db")
+        await storage.initialize()
         handler = TimeCommandHandler(storage, TimeService(), FakeRenderService())
 
         set_evt = FakeEvent("/time set +8", group_id="g1", sender_id="u1", sender_name="U1")

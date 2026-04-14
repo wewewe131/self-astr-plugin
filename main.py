@@ -27,7 +27,7 @@ class TimePlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
-        self.storage = StorageService(self.get_kv_data, self.put_kv_data)
+        self.storage = StorageService()
         self.time_service = TimeService()
         self.render_service = RenderService()
 

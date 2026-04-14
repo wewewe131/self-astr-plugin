@@ -50,15 +50,10 @@ async def _collect(async_gen):
     return [item async for item in async_gen]
 
 
-def test_alias_set_and_view():
+def test_alias_set_and_view(tmp_path):
     async def _run():
-        async def fake_get(key, default):
-            return default
-
-        async def fake_put(key, value):
-            return None
-
-        storage = StorageService(fake_get, fake_put)
+        storage = StorageService(sqlite_db_path=tmp_path / "data_v4.db")
+        await storage.initialize()
         handler = AliasCommandHandler(storage)
 
         evt_set = FakeEvent("/alias @u2 老王", messages=[At("u2")])
@@ -72,15 +67,10 @@ def test_alias_set_and_view():
     asyncio.run(_run())
 
 
-def test_alias_reject_multi_target_set():
+def test_alias_reject_multi_target_set(tmp_path):
     async def _run():
-        async def fake_get(key, default):
-            return default
-
-        async def fake_put(key, value):
-            return None
-
-        storage = StorageService(fake_get, fake_put)
+        storage = StorageService(sqlite_db_path=tmp_path / "data_v4.db")
+        await storage.initialize()
         handler = AliasCommandHandler(storage)
 
         evt = FakeEvent("/alias @u2 @u3 张三", messages=[At("u2"), At("u3")])
@@ -90,15 +80,10 @@ def test_alias_reject_multi_target_set():
     asyncio.run(_run())
 
 
-def test_alias_clear_without_data():
+def test_alias_clear_without_data(tmp_path):
     async def _run():
-        async def fake_get(key, default):
-            return default
-
-        async def fake_put(key, value):
-            return None
-
-        storage = StorageService(fake_get, fake_put)
+        storage = StorageService(sqlite_db_path=tmp_path / "data_v4.db")
+        await storage.initialize()
         handler = AliasCommandHandler(storage)
 
         evt = FakeEvent("/alias clear")
@@ -108,15 +93,10 @@ def test_alias_clear_without_data():
     asyncio.run(_run())
 
 
-def test_alias_set_uses_message_chain_text_after_at():
+def test_alias_set_uses_message_chain_text_after_at(tmp_path):
     async def _run():
-        async def fake_get(key, default):
-            return default
-
-        async def fake_put(key, value):
-            return None
-
-        storage = StorageService(fake_get, fake_put)
+        storage = StorageService(sqlite_db_path=tmp_path / "data_v4.db")
+        await storage.initialize()
         handler = AliasCommandHandler(storage)
 
         evt = FakeEvent(
@@ -129,15 +109,10 @@ def test_alias_set_uses_message_chain_text_after_at():
     asyncio.run(_run())
 
 
-def test_alias_set_keeps_command_and_alias_separated_across_at():
+def test_alias_set_keeps_command_and_alias_separated_across_at(tmp_path):
     async def _run():
-        async def fake_get(key, default):
-            return default
-
-        async def fake_put(key, value):
-            return None
-
-        storage = StorageService(fake_get, fake_put)
+        storage = StorageService(sqlite_db_path=tmp_path / "data_v4.db")
+        await storage.initialize()
         handler = AliasCommandHandler(storage)
 
         evt = FakeEvent(

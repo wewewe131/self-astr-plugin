@@ -7,6 +7,7 @@ from typing import TypedDict
 class UserInfo(TypedDict, total=False):
     tz: str
     name: str
+    alias: str
 
 
 TimezoneData = dict[str, dict[str, UserInfo]]

@@ -6,10 +6,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 try:
     from ..core.constants import OFFSET_RE
-    from ..core.types import AliasData, Entry, UserInfo
+    from ..core.types import Entry, UserInfo
 except ImportError:  # pragma: no cover - local direct-import fallback
     from core.constants import OFFSET_RE
-    from core.types import AliasData, Entry, UserInfo
+    from core.types import Entry, UserInfo
 
 try:
     from astrbot.api import logger
@@ -52,15 +52,9 @@ class TimeService:
         self,
         uid: str,
         info: UserInfo | None = None,
-        aliases: AliasData | None = None,
-        viewer: str | None = None,
     ) -> str:
-        if viewer and aliases:
-            owner_map = aliases.get(str(viewer))
-            if owner_map:
-                alias = owner_map.get(str(uid))
-                if alias:
-                    return alias
+        if info and info.get("alias"):
+            return str(info["alias"])
         if info and info.get("name"):
             return str(info["name"])
         return str(uid)

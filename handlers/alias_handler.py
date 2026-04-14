@@ -51,7 +51,7 @@ class AliasCommandHandler:
 
         if not at_targets:
             if not clean:
-                owned = self.storage.aliases.get(owner) or {}
+                owned = await self.storage.list_aliases(owner)
                 if not owned:
                     yield event.plain_result(
                         "你还没有为任何人设置名片\n"
@@ -69,9 +69,8 @@ class AliasCommandHandler:
                 yield event.plain_result(ALIAS_HELP_TEXT)
                 return
             if first in ALIAS_CLEAR_ALIASES:
-                if owner in self.storage.aliases:
-                    del self.storage.aliases[owner]
-                    await self.storage.save_aliases()
+                removed = await self.storage.clear_aliases(owner)
+                if removed:
                     yield event.plain_result("已清除你设置的全部名片")
                 else:
                     yield event.plain_result("你还没有设置任何名片")
@@ -86,19 +85,13 @@ class AliasCommandHandler:
         action_tokens = text_tokens or clean
 
         if action_tokens and action_tokens[0].lower() in ALIAS_UNSET_ALIASES:
-            owned = self.storage.aliases.get(owner) or {}
+            removed_map = await self.storage.delete_aliases(owner, at_targets)
             removed, missing = [], []
             for tgt in at_targets:
-                if tgt in owned:
-                    removed.append(f"{owned[tgt]}（{tgt}）")
-                    del owned[tgt]
+                if tgt in removed_map:
+                    removed.append(f"{removed_map[tgt]}（{tgt}）")
                 else:
                     missing.append(tgt)
-            if owned:
-                self.storage.aliases[owner] = owned
-            elif owner in self.storage.aliases:
-                del self.storage.aliases[owner]
-            await self.storage.save_aliases()
             parts = []
             if removed:
                 parts.append("已移除名片：" + "、".join(removed))
@@ -108,7 +101,7 @@ class AliasCommandHandler:
             return
 
         if not action_tokens:
-            owned = self.storage.aliases.get(owner) or {}
+            owned = await self.storage.list_aliases(owner, at_targets)
             lines = []
             for tgt in at_targets:
                 if tgt in owned:
@@ -131,6 +124,5 @@ class AliasCommandHandler:
             return
 
         target = at_targets[0]
-        self.storage.aliases.setdefault(owner, {})[target] = new_alias
-        await self.storage.save_aliases()
+        await self.storage.set_alias(owner, target, new_alias)
         yield event.plain_result(f"已将 {target} 的名片设置为：{new_alias}\n（仅你自己可见）")
