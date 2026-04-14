@@ -78,7 +78,13 @@ class TimeCommandHandler:
             for member in getattr(group, "members", None) or []
             if (uid := str(getattr(member, "user_id", "") or ""))
             and uid in wanted
-            and (name := str(getattr(member, "nickname", "") or "").strip())
+            and (
+                name := str(
+                    getattr(member, "card", "")
+                    or getattr(member, "nickname", "")
+                    or ""
+                ).strip()
+            )
         }
         users = {
             uid: ({**info, "name": names[uid]} if uid in names else info)

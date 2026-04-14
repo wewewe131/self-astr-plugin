@@ -58,8 +58,12 @@ class FakeEvent:
 
     async def get_group(self, group_id=None, **kwargs):
         members = [
-            SimpleNamespace(user_id=uid, nickname=name)
-            for uid, name in self._group_members.items()
+            SimpleNamespace(
+                user_id=uid,
+                card=member[0] if isinstance(member, tuple) else member,
+                nickname=member[1] if isinstance(member, tuple) else member,
+            )
+            for uid, member in self._group_members.items()
         ]
         return SimpleNamespace(members=members)
 
@@ -112,7 +116,7 @@ def test_time_set_and_list_routes(tmp_path):
             group_id="g1",
             sender_id="u1",
             sender_name="旧昵称",
-            group_members={"u1": "当前群名片"},
+            group_members={"u1": ("当前群名片", "用户名")},
         )
         set_result = await _collect(handler.handle(set_evt))
         assert "已登记 当前群名片 的时区为 UTC+08:00" in set_result[0]
@@ -121,7 +125,7 @@ def test_time_set_and_list_routes(tmp_path):
             "/time list",
             group_id="g1",
             sender_id="u1",
-            group_members={"u1": "当前群名片"},
+            group_members={"u1": ("当前群名片", "用户名")},
         )
         list_result = await _collect(handler.handle(list_evt))
         assert "本群已登记 1 人" in list_result[0]
@@ -142,7 +146,7 @@ def test_time_list_prefers_alias_over_group_card(tmp_path):
             "/time list",
             group_id="g1",
             sender_id="viewer1",
-            group_members={"u1": "当前群名片"},
+            group_members={"u1": ("当前群名片", "用户名")},
         )
         result = await _collect(handler.handle(event))
 
