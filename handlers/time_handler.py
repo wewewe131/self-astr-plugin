@@ -63,6 +63,45 @@ class TimeCommandHandler:
             return str(getattr(sender, "card", "") or "").strip()
         return str(getattr(sender, "nickname", "") or "").strip() or None
 
+    def _member_field(self, member: Any, field: str) -> Any:
+        if isinstance(member, dict):
+            return member.get(field)
+        return getattr(member, field, None)
+
+    def _member_group_name(self, member: Any) -> str | None:
+        if isinstance(member, dict):
+            if "card" in member:
+                return str(member.get("card") or "").strip()
+            return str(member.get("nickname") or "").strip() or None
+        if hasattr(member, "card"):
+            return str(getattr(member, "card", "") or "").strip()
+        return str(getattr(member, "nickname", "") or "").strip() or None
+
+    async def _group_members(self, group: Any) -> list[Any]:
+        if isinstance(group, dict):
+            members = group.get("members")
+            if members is not None:
+                return list(members)
+            members = group.get("member_list")
+            return list(members or [])
+
+        members = getattr(group, "members", None)
+        if members is not None:
+            return list(members)
+
+        members = getattr(group, "member_list", None)
+        if members is not None:
+            return list(members)
+
+        get_members = getattr(group, "get_members", None)
+        if callable(get_members):
+            members = get_members()
+            if inspect.isawaitable(members):
+                members = await members
+            return list(members or [])
+
+        return []
+
     async def _load_users(
         self,
         event: Any,
@@ -90,19 +129,16 @@ class TimeCommandHandler:
 
         wanted = {str(uid) for uid in (target_uids or list(users))}
         names: dict[str, str] = {}
-        for member in getattr(group, "members", None) or []:
-            uid = str(getattr(member, "user_id", "") or "")
+        for member in await self._group_members(group):
+            uid = str(self._member_field(member, "user_id") or "")
             if not uid or uid not in wanted:
                 continue
-            if hasattr(member, "card"):
-                names[uid] = str(getattr(member, "card", "") or "").strip()
-                continue
-            name = str(getattr(member, "nickname", "") or "").strip()
-            if name:
+            name = self._member_group_name(member)
+            if name is not None:
                 names[uid] = name
         sender_uid = str(event.get_sender_id())
         sender_name = self._sender_group_name(event)
-        if sender_name is not None and sender_uid in wanted:
+        if sender_uid in wanted and sender_name is not None and not names.get(sender_uid):
             names[sender_uid] = sender_name
         users = {
             uid: ({**info, "name": names[uid]} if uid in names else info)
@@ -237,10 +273,13 @@ class TimeCommandHandler:
         await self.storage.upsert_timezone(str(group_id), uid, canonical)
         _, _, _, names = await self._load_users(event, [uid])
         sender_name = self._sender_group_name(event)
+        resolved_names = names
+        if sender_name is not None and not names.get(uid):
+            resolved_names = {**names, uid: sender_name}
         info = self._info(
             uid,
             aliases=await self.storage.list_aliases(uid, [uid]),
-            names={uid: sender_name} if sender_name is not None else names,
+            names=resolved_names,
             fallback=None if sender_name is not None else event.get_sender_name(),
         )
 

@@ -11,6 +11,11 @@ class FakeRenderService:
         return [f"{header}:{len(entries)}"]
 
 
+class At:
+    def __init__(self, qq):
+        self.qq = qq
+
+
 class MsgObj:
     def __init__(self, self_id="", sender=None):
         self.self_id = self_id
@@ -67,14 +72,18 @@ class FakeEvent:
         return self._admin
 
     async def get_group(self, group_id=None, **kwargs):
-        members = [
-            SimpleNamespace(
-                user_id=uid,
-                card=member[0] if isinstance(member, tuple) else member,
-                nickname=member[1] if isinstance(member, tuple) else member,
+        members = []
+        for uid, member in self._group_members.items():
+            if isinstance(member, dict):
+                members.append({"user_id": uid, **member})
+                continue
+            members.append(
+                SimpleNamespace(
+                    user_id=uid,
+                    card=member[0] if isinstance(member, tuple) else member,
+                    nickname=member[1] if isinstance(member, tuple) else member,
+                )
             )
-            for uid, member in self._group_members.items()
-        ]
         return SimpleNamespace(members=members)
 
     def plain_result(self, text):
@@ -198,5 +207,33 @@ def test_time_list_prefers_alias_over_group_card(tmp_path):
 
         assert "老王" in result[0]
         assert "当前群名片" not in result[0]
+
+    asyncio.run(_run())
+
+
+def test_time_list_matches_db_users_to_group_member_cards(tmp_path):
+    async def _run():
+        storage = StorageService(sqlite_db_path=tmp_path / "data_v4.db")
+        await storage.initialize()
+        await storage.upsert_timezone("g1", "u1", "Asia/Shanghai")
+        await storage.upsert_timezone("g1", "u2", "Europe/London")
+        handler = TimeCommandHandler(storage, TimeService(), FakeRenderService())
+
+        event = FakeEvent(
+            "/time list",
+            group_id="g1",
+            sender_id="u1",
+            sender_name="发送者昵称",
+            sender_card="发送者群名片",
+            group_members={
+                "u1": {"card": "发送者群名片", "nickname": "发送者昵称"},
+                "u2": {"card": "目标群名片", "nickname": "目标昵称"},
+            },
+        )
+        result = await _collect(handler.handle(event))
+
+        assert "发送者群名片" in result[0]
+        assert "目标群名片" in result[0]
+        assert "· u2" not in result[0]
 
     asyncio.run(_run())
