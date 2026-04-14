@@ -147,6 +147,39 @@ def test_time_set_and_list_routes(tmp_path):
     asyncio.run(_run())
 
 
+def test_time_does_not_fallback_to_username_when_card_is_blank(tmp_path):
+    async def _run():
+        storage = StorageService(sqlite_db_path=tmp_path / "data_v4.db")
+        await storage.initialize()
+        handler = TimeCommandHandler(storage, TimeService(), FakeRenderService())
+
+        set_evt = FakeEvent(
+            "/time set +8",
+            group_id="g1",
+            sender_id="u1",
+            sender_name="用户名",
+            sender_card="",
+            group_members={"u1": ("", "用户名")},
+        )
+        set_result = await _collect(handler.handle(set_evt))
+        assert "已登记 u1 的时区为 UTC+08:00" in set_result[0]
+        assert "用户名" not in set_result[0]
+
+        list_evt = FakeEvent(
+            "/time list",
+            group_id="g1",
+            sender_id="u1",
+            sender_name="用户名",
+            sender_card="",
+            group_members={"u1": ("", "用户名")},
+        )
+        list_result = await _collect(handler.handle(list_evt))
+        assert "u1" in list_result[0]
+        assert "用户名" not in list_result[0]
+
+    asyncio.run(_run())
+
+
 def test_time_list_prefers_alias_over_group_card(tmp_path):
     async def _run():
         storage = StorageService(sqlite_db_path=tmp_path / "data_v4.db")

@@ -47,7 +47,7 @@ class TimeCommandHandler:
     def _display_name(self, uid: str, info: dict | None = None, viewer: str | None = None) -> str:
         return self.time_service.display_name(uid, info=info)
 
-    def _sender_group_name(self, event: Any) -> str:
+    def _sender_group_name(self, event: Any) -> str | None:
         message_obj = getattr(event, "message_obj", None)
         raw_message = getattr(message_obj, "raw_message", None)
         sender = (
@@ -56,12 +56,12 @@ class TimeCommandHandler:
             else getattr(raw_message, "sender", None)
         ) or getattr(message_obj, "sender", None)
         if isinstance(sender, dict):
-            return str(sender.get("card") or sender.get("nickname") or "").strip()
-        return str(
-            getattr(sender, "card", "")
-            or getattr(sender, "nickname", "")
-            or ""
-        ).strip()
+            if "card" in sender:
+                return str(sender.get("card") or "").strip()
+            return str(sender.get("nickname") or "").strip()
+        if hasattr(sender, "card"):
+            return str(getattr(sender, "card", "") or "").strip()
+        return str(getattr(sender, "nickname", "") or "").strip() or None
 
     async def _load_users(
         self,
@@ -89,22 +89,20 @@ class TimeCommandHandler:
             return str(group_id), viewer, users, {}
 
         wanted = {str(uid) for uid in (target_uids or list(users))}
-        names = {
-            uid: name
-            for member in getattr(group, "members", None) or []
-            if (uid := str(getattr(member, "user_id", "") or ""))
-            and uid in wanted
-            and (
-                name := str(
-                    getattr(member, "card", "")
-                    or getattr(member, "nickname", "")
-                    or ""
-                ).strip()
-            )
-        }
+        names: dict[str, str] = {}
+        for member in getattr(group, "members", None) or []:
+            uid = str(getattr(member, "user_id", "") or "")
+            if not uid or uid not in wanted:
+                continue
+            if hasattr(member, "card"):
+                names[uid] = str(getattr(member, "card", "") or "").strip()
+                continue
+            name = str(getattr(member, "nickname", "") or "").strip()
+            if name:
+                names[uid] = name
         sender_uid = str(event.get_sender_id())
         sender_name = self._sender_group_name(event)
-        if sender_name and sender_uid in wanted:
+        if sender_name is not None and sender_uid in wanted:
             names[sender_uid] = sender_name
         users = {
             uid: ({**info, "name": names[uid]} if uid in names else info)
@@ -238,11 +236,12 @@ class TimeCommandHandler:
         uid = str(event.get_sender_id())
         await self.storage.upsert_timezone(str(group_id), uid, canonical)
         _, _, _, names = await self._load_users(event, [uid])
+        sender_name = self._sender_group_name(event)
         info = self._info(
             uid,
             aliases=await self.storage.list_aliases(uid, [uid]),
-            names={uid: self._sender_group_name(event) or names.get(uid, "")},
-            fallback=event.get_sender_name(),
+            names={uid: sender_name} if sender_name is not None else names,
+            fallback=None if sender_name is not None else event.get_sender_name(),
         )
 
         msg = f"已登记 {self._display_name(uid, info, viewer=uid)} 的时区为 {canonical}"
